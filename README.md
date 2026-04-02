@@ -8,6 +8,8 @@ StatLine is an NBA prediction project with a pre-game prediction pipeline based 
 
 For Lab 8, we implemented and tested a 1D CNN and compared it against the existing SVM baseline for pre-game NBA game prediction.
 
+Dataset link is in our github repo : https://github.com/zabu24/nba_ml_mid-final/tree/main/Datasets 
+
 ## Main Files
 
 - `train_svm_momentum_svm.py`  
