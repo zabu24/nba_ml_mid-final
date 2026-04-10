@@ -20,6 +20,7 @@ import joblib
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -248,6 +249,37 @@ def train_svm_baseline(
 
 
 # ----------------------------
+# KNN baseline
+# ----------------------------
+
+def train_knn_baseline(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    n_neighbors: int = 10,
+) -> Pipeline:
+    """
+    Train a KNN baseline on the same feature set.
+    Uses scaling first because KNN is distance-based.
+    """
+    knn_model = Pipeline(
+        steps=[
+            ("scaler", StandardScaler()),
+            (
+                "knn",
+                KNeighborsClassifier(
+                    n_neighbors=n_neighbors,
+                    weights="distance",
+                ),
+            ),
+        ]
+    )
+
+    print("\nTraining KNN baseline...")
+    knn_model.fit(X_train, y_train)
+    return knn_model
+
+
+# ----------------------------
 # CNN model
 # ----------------------------
 
@@ -373,6 +405,25 @@ def evaluate_svm(
     }
 
 
+def evaluate_knn(
+    model: Pipeline,
+    X_val: pd.DataFrame,
+    y_val: pd.Series,
+) -> Dict[str, object]:
+    y_pred = model.predict(X_val)
+    y_prob = model.predict_proba(X_val)[:, 1]
+
+    metrics = compute_binary_metrics(y_val.to_numpy(), y_pred)
+
+    return {
+        "metrics": metrics,
+        "y_pred": y_pred,
+        "y_prob": y_prob,
+        "report": classification_report(y_val, y_pred, zero_division=0),
+        "confusion_matrix": confusion_matrix(y_val, y_pred).tolist(),
+    }
+
+
 def evaluate_cnn(
     model: tf.keras.Model,
     scaler: StandardScaler,
@@ -453,11 +504,13 @@ def save_cnn_artifacts(
 def save_comparison_csv(
     svm_metrics: Dict[str, float],
     cnn_metrics: Dict[str, float],
+    knn_metrics: Dict[str, float],
     out_csv: str,
 ) -> None:
     rows = [
         {"model": "SVM", **svm_metrics},
         {"model": "CNN_1D", **cnn_metrics},
+        {"model": "KNN", **knn_metrics},
     ]
     df = pd.DataFrame(rows)
     out_file = Path(out_csv)
@@ -528,12 +581,22 @@ def run_comparison(
     print("Confusion Matrix:", cnn_results["confusion_matrix"])
     print("Metrics:", cnn_results["metrics"])
 
+    # ---- Train KNN ----
+    knn_model = train_knn_baseline(X_train, y_train, n_neighbors=10)
+    knn_results = evaluate_knn(knn_model, X_val, y_val)
+
+    print("\n===== KNN RESULTS =====")
+    print(knn_results["report"])
+    print("Confusion Matrix:", knn_results["confusion_matrix"])
+    print("Metrics:", knn_results["metrics"])
+
     # ---- Print final comparison ----
     print("\n===== FINAL MODEL COMPARISON =====")
     comparison_df = pd.DataFrame(
         [
             {"model": "SVM", **svm_results["metrics"]},
             {"model": "CNN_1D", **cnn_results["metrics"]},
+            {"model": "KNN", **knn_results["metrics"]},
         ]
     )
     print(comparison_df.to_string(index=False))
@@ -584,6 +647,7 @@ def run_comparison(
     save_comparison_csv(
         svm_metrics=svm_results["metrics"],
         cnn_metrics=cnn_results["metrics"],
+        knn_metrics=knn_results["metrics"],
         out_csv=str(results_dir / f"pregame_model_comparison_chronological_{timestamp}.csv"),
     )
 
@@ -595,6 +659,10 @@ def run_comparison(
         "cnn": {
             "metrics": cnn_results["metrics"],
             "confusion_matrix": cnn_results["confusion_matrix"],
+        },
+        "knn": {
+            "metrics": knn_results["metrics"],
+            "confusion_matrix": knn_results["confusion_matrix"],
         },
         "metadata": metadata,
     }
